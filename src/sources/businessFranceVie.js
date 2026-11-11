@@ -47,14 +47,7 @@ const INCLUDE_KEYWORDS = [
  
 // Mots-clés à EXCLURE (vérifiés uniquement dans le TITRE de l'offre) :
 // postes travaux, commerciaux, pétrole & gaz, maintenance… (cf. projet pro).
-const EXCLUDE_TITLE_KEYWORDS = [
-  "conducteur de travaux", "chef de chantier", "site manager", "construction manager", "superintendent",
-  "commercial", "sales", "vente", "business developer", "business development", "ingénieur d'affaires",
-  "ingenieur d'affaires", "account manager", "key account", "chargé d'affaires", "charge d'affaires",
-  "oil", "pétrole", "petrole", "mining", "minier",
-  "maintenance", "commissioning", "mise en service", "hvac", "cvc", "climatisation",
-  "achat", "achats", "procurement", "buyer", "acheteur",
-];
+const EXCLUDE_TITLE_KEYWORDS = [];
  
 // Une réponse "ressemble" à une liste d'offres VIE si ses éléments ont un
 // champ missionTitle (nom de champ confirmé par inspection réelle de l'API).
