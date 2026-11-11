@@ -16,7 +16,7 @@ function renderHtml(offers) {
 
   return `
   <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
-    <h2 style="color:#111;">🎯 ${offers.length} nouvelle(s) offre(s) VIE / IT</h2>
+    <h2 style="color:#111;">🎯 ${offers.length} nouvelle(s) offre(s) VIE Énergie / Climat</h2>
     <table style="width:100%;border-collapse:collapse;">${rows}</table>
     <p style="color:#999;font-size:12px;margin-top:20px;">
       Digest automatique généré ce matin. Sources : Business France (VIE), France Travail.
@@ -44,7 +44,7 @@ export async function sendDigestEmail(offers) {
   const { error } = await resend.emails.send({
     from,
     to,
-    subject: `${offers.length} nouvelle(s) offre(s) VIE / IT`,
+    subject: `${offers.length} nouvelle(s) offre(s) VIE Énergie / Climat`,
     html: renderHtml(offers),
   });
 
