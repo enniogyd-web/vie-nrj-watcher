@@ -11,26 +11,51 @@
 // en local : ça sauvegarde toutes les réponses JSON dans
 // data/debug-responses.json, ainsi qu'un aperçu des boutons/liens visibles
 // sur la page dans data/debug-buttons.json.
-
+ 
 import { chromium } from "playwright";
 import { writeFile } from "fs/promises";
-
+ 
 const SEARCH_URL = "https://mon-vie-via.businessfrance.fr/offres/recherche?latest=true";
-
+ 
 // Nombre max de tentatives de "charger plus" (clic ou scroll) avant d'arrêter,
 // par sécurité si jamais la pagination ne se termine jamais.
 const MAX_LOAD_MORE_ATTEMPTS = 40;
-
-// Mots-clés IT : on cible informatique / logiciel / systèmes d'information.
-const IT_KEYWORDS = [
-  "informatique", "logiciel", "système d'information", "systeme d'information",
-  "développeur", "developpeur", "data", "cybersécurité", "cybersecurite",
-  "cloud", "devops", "digital", "numérique", "numerique", " IT ", " SI ",
-  "réseau", "reseau", "full stack", "fullstack", "backend", "frontend",
-  "ingénieur informatique", "ingenieur informatique", "software", "sap",
-  "programmeur", "programmation", "web developer", "software engineer",
+ 
+// Mots-clés ÉNERGIE / DÉCARBONATION : une offre est gardée si son titre,
+// sa description ou son profil contient au moins un de ces mots.
+// (Tout est comparé en minuscules ; ajoute ou retire librement.)
+const INCLUDE_KEYWORDS = [
+  // Énergie, ENR, réseaux
+  "énergie", "energie", "energy", "renouvelable", "renewable",
+  "solaire", "solar", "photovolta", "éolien", "eolien", "wind farm", "wind energy", "offshore wind",
+  "hydrogène", "hydrogene", "hydrogen", "batterie", "battery", "bess", "stockage d'énergie", "energy storage",
+  "réseau électrique", "reseau electrique", "réseaux électriques", "power grid", "smart grid", "grid connection",
+  "électricité", "electricite", "electricity", "power plant", "power system", "power generation", "power market",
+  "nucléaire", "nucleaire", "nuclear", "hydroélectri", "hydroelectri", "hydropower",
+  "électrification", "electrification", "transition énergétique", "transition energetique", "energy transition",
+  "efficacité énergétique", "efficacite energetique", "energy efficiency", "performance énergétique",
+  // Climat, décarbonation
+  "décarbonation", "decarbonation", "décarbonisation", "decarbonization", "decarbonisation",
+  "bas carbone", "low carbon", "low-carbon", "net zero", "net-zero", "bilan carbone", "carbon footprint",
+  "émissions", "emissions", "changement climatique", "climate", "climatique",
+  "développement durable", "sustainability", "durabilité",
+  // Métiers ciblés
+  "contrôle de projet", "controle de projet", "project control", "cost control", "planning engineer",
+  "développement de projets", "developpement de projets", "project developer", "project development",
+  "asset manager", "asset management",
 ];
-
+ 
+// Mots-clés à EXCLURE (vérifiés uniquement dans le TITRE de l'offre) :
+// postes travaux, commerciaux, pétrole & gaz, maintenance… (cf. projet pro).
+const EXCLUDE_TITLE_KEYWORDS = [
+  "conducteur de travaux", "chef de chantier", "site manager", "construction manager", "superintendent",
+  "commercial", "sales", "vente", "business developer", "business development", "ingénieur d'affaires",
+  "ingenieur d'affaires", "account manager", "key account", "chargé d'affaires", "charge d'affaires",
+  "oil", "pétrole", "petrole", "mining", "minier",
+  "maintenance", "commissioning", "mise en service", "hvac", "cvc", "climatisation",
+  "achat", "achats", "procurement", "buyer", "acheteur",
+];
+ 
 // Une réponse "ressemble" à une liste d'offres VIE si ses éléments ont un
 // champ missionTitle (nom de champ confirmé par inspection réelle de l'API).
 function looksLikeJobArray(value) {
@@ -42,7 +67,7 @@ function looksLikeJobArray(value) {
     ("missionTitle" in sample || "reference" in sample)
   );
 }
-
+ 
 function extractJobsFromJson(json) {
   const found = [];
   function walk(value) {
@@ -56,7 +81,7 @@ function extractJobsFromJson(json) {
   walk(json);
   return found;
 }
-
+ 
 async function tryLoadMore(page) {
   // Stratégie 1 : un vrai <button>/<a> dont le texte contient "plus" et "offre(s)"
   const byText = page.getByText(/plus.{0,15}offres?/i);
@@ -68,7 +93,7 @@ async function tryLoadMore(page) {
       return true;
     }
   }
-
+ 
   // Stratégie 2 : infinite scroll — certains sites chargent la suite
   // automatiquement quand on atteint le bas de page, sans bouton.
   const previousHeight = await page.evaluate(() => document.body.scrollHeight);
@@ -77,16 +102,16 @@ async function tryLoadMore(page) {
   const newHeight = await page.evaluate(() => document.body.scrollHeight);
   return newHeight > previousHeight;
 }
-
+ 
 export async function fetchBusinessFranceVieOffers() {
   const debug = process.env.DEBUG_VIE === "1";
   const capturedResponses = [];
   const jobsById = new Map();
-
+ 
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
-
+ 
     page.on("response", async (response) => {
       const contentType = response.headers()["content-type"] || "";
       if (!contentType.includes("application/json")) return;
@@ -100,16 +125,16 @@ export async function fetchBusinessFranceVieOffers() {
         // réponse non-JSON valide, on ignore
       }
     });
-
+ 
     await page.goto(SEARCH_URL, { waitUntil: "networkidle", timeout: 30000 });
     await page.waitForTimeout(2000);
-
+ 
     const cookieButton = page.getByRole("button", { name: /accepter|tout accepter|j'accepte/i });
     if ((await cookieButton.count()) > 0) {
       await cookieButton.first().click().catch(() => {});
       await page.waitForTimeout(500);
     }
-
+ 
     let attempts = 0;
     let stagnantRounds = 0;
     let lastCount = jobsById.size;
@@ -117,7 +142,7 @@ export async function fetchBusinessFranceVieOffers() {
       const progressed = await tryLoadMore(page);
       await page.waitForTimeout(1500);
       attempts += 1;
-
+ 
       if (jobsById.size === lastCount && !progressed) {
         stagnantRounds += 1;
       } else {
@@ -128,7 +153,7 @@ export async function fetchBusinessFranceVieOffers() {
     console.log(
       `[businessFranceVie] ${attempts} tentative(s) de chargement, ${jobsById.size} offre(s) collectée(s).`
     );
-
+ 
     if (debug) {
       const clickableTexts = await page
         .locator("button, a, [role=button]")
@@ -145,7 +170,7 @@ export async function fetchBusinessFranceVieOffers() {
   } finally {
     await browser.close();
   }
-
+ 
   if (debug) {
     await writeFile(
       "data/debug-responses.json",
@@ -157,7 +182,7 @@ export async function fetchBusinessFranceVieOffers() {
       `et les textes de boutons dans data/debug-buttons.json`
     );
   }
-
+ 
   const rawJobs = Array.from(jobsById.values());
   if (rawJobs.length === 0) {
     console.warn(
@@ -165,7 +190,7 @@ export async function fetchBusinessFranceVieOffers() {
     );
     return [];
   }
-
+ 
   const offers = rawJobs.map((job) => ({
     id: `bfv-${job.id ?? job.reference}`,
     title: job.missionTitle || "Offre VIE",
@@ -178,9 +203,9 @@ export async function fetchBusinessFranceVieOffers() {
     publishedAt: job.creationDate || null,
     _searchText: `${job.missionTitle || ""} ${job.missionDescription || ""} ${job.missionProfile || ""}`.toLowerCase(),
   }));
-
+ 
   return offers
-    .filter((o) => IT_KEYWORDS.some((kw) => o._searchText.includes(kw.toLowerCase())))
+    .filter((o) => INCLUDE_KEYWORDS.some((kw) => o._searchText.includes(kw.toLowerCase())))
+    .filter((o) => !EXCLUDE_TITLE_KEYWORDS.some((kw) => o.title.toLowerCase().includes(kw.toLowerCase())))
     .map(({ _searchText, ...o }) => o);
 }
-
