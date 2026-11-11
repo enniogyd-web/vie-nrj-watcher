@@ -2,7 +2,7 @@ name: Watcher VIE / IT (horaire)
 
 on:
   schedule:
-    - cron: "0 * * * *" # toutes les heures, à la minute 0
+    - cron: "17 5,11,17 * * *" # vers 6h, 12h et 18h à Paris # toutes les heures, à la minute 0
   workflow_dispatch: {}
 
 permissions:
